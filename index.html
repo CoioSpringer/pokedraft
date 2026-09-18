@@ -8,8 +8,10 @@
       (() => {
         try {
           const theme = localStorage.getItem("pokedraft:theme");
-          if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
-        } catch (_) {}
+          document.documentElement.dataset.theme = (theme === "light" || theme === "dark") ? theme : "dark";
+        } catch (_) {
+          document.documentElement.dataset.theme = "dark";
+        }
       })();
     </script>
     <title>PokeDraft — monte seu time</title>
@@ -26,8 +28,8 @@
         </a>
         <div class="topbar-actions">
           <span id="net-status" class="net-status-pill" aria-live="polite">Local</span>
-          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Ativar tema claro" aria-pressed="false" title="Ativar tema claro">
-            <span class="theme-toggle-ball" aria-hidden="true"><span></span></span>
+          <button id="theme-toggle" class="theme-toggle" type="button" onclick="window.__pokedraftToggleTheme && window.__pokedraftToggleTheme(event)" aria-label="Ativar tema claro" aria-pressed="false" title="Ativar tema claro">
+            <img class="theme-toggle-icon" src="pokeball-theme.png" width="28" height="28" alt="" decoding="async" />
             <span class="sr-only">Ativar tema claro</span>
           </button>
           <label class="volume-control" for="cry-volume" title="Volume dos cries">
