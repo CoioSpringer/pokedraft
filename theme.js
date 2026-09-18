@@ -1,19 +1,20 @@
 (() => {
   const THEME_KEY = "pokedraft:theme";
   const root = document.documentElement;
+  let bound = false;
 
-  function savedTheme() {
+  function readTheme() {
+    const fromDom = root.getAttribute("data-theme");
+    if (fromDom === "light" || fromDom === "dark") return fromDom;
     try {
-      const theme = localStorage.getItem(THEME_KEY);
-      return theme === "light" || theme === "dark" ? theme : "dark";
-    } catch (_) {
-      return "dark";
-    }
+      const stored = localStorage.getItem(THEME_KEY);
+      if (stored === "light" || stored === "dark") return stored;
+    } catch (_) {}
+    return "dark";
   }
 
   function setTheme(theme, persist = true) {
     const nextTheme = theme === "light" ? "light" : "dark";
-    root.dataset.theme = nextTheme;
     root.setAttribute("data-theme", nextTheme);
     if (persist) {
       try { localStorage.setItem(THEME_KEY, nextTheme); } catch (_) {}
@@ -32,21 +33,20 @@
   }
 
   function toggleTheme(event) {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    const current = root.dataset.theme === "light" ? "light" : "dark";
-    setTheme(current === "light" ? "dark" : "light");
+    if (event) event.preventDefault();
+    const current = readTheme();
+    setTheme(current === "light" ? "dark" : "light", true);
   }
 
   window.__pokedraftToggleTheme = toggleTheme;
-  setTheme(savedTheme(), false);
+  setTheme(readTheme(), false);
 
   function bind() {
-    document.querySelectorAll("#theme-toggle").forEach((button) => {
-      button.addEventListener("click", toggleTheme);
-    });
+    if (bound) return;
+    const button = document.getElementById("theme-toggle");
+    if (!button) return;
+    bound = true;
+    button.addEventListener("click", toggleTheme);
   }
 
   if (document.readyState === "loading") {
