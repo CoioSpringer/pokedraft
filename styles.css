@@ -370,3 +370,61 @@ h1 em { color: var(--yellow); font-style: normal; }
 }
 
 .mp-room-banner { margin: 0 0 24px; }
+
+/* ——— Lobby ——— */
+.lobby-screen { animation: reveal .24s ease-out; }
+.lobby-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.lobby-header h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  letter-spacing: -0.04em;
+}
+.lobby-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 20px;
+  align-items: start;
+}
+.lobby-player-list { display: grid; gap: 10px; margin-top: 8px; }
+.lobby-player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(5, 13, 25, 0.55);
+}
+.lobby-player-row.is-empty {
+  border-style: dashed;
+  opacity: 0.55;
+}
+.lobby-player-row.is-mine {
+  border-color: var(--green);
+  background: rgba(116, 208, 159, 0.08);
+}
+.lobby-player-row.is-host-seat {
+  border-color: rgba(239, 63, 57, 0.45);
+}
+.lobby-player-name {
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+.lobby-player-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: right;
+}
+.lobby-self-card .primary-button { width: 100%; }
+
+@media (max-width: 1000px) {
+  .lobby-layout { grid-template-columns: 1fr; }
+}

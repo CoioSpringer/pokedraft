@@ -103,7 +103,7 @@
               </button>
               <button type="button" class="mp-mode-option" data-mode="host" aria-checked="false" role="radio">
                 <span class="mp-mode-label">Criar sala online</span>
-                <span class="mp-mode-desc">Configure região e apelidos, depois inicie para gerar um código compartilhável.</span>
+                <span class="mp-mode-desc">Crie a sala, compartilhe o link, cada um escolhe seu apelido e o anfitrião inicia o draft.</span>
               </button>
               <button type="button" class="mp-mode-option" data-mode="guest" aria-checked="false" role="radio">
                 <span class="mp-mode-label">Entrar em uma sala</span>
@@ -112,8 +112,12 @@
             </div>
 
             <div id="mp-host-panel" class="mp-panel" hidden>
-              <p class="helper-text">Ao iniciar o draft, uma sala PeerJS será criada. Mantenha esta aba aberta — o anfitrião é a autoridade do jogo.</p>
+              <p class="helper-text">Escolha a região e o máximo de jogadores acima, depois crie a sala. O draft só começa depois que todos entrarem no lobby.</p>
               <p class="mp-host-note">⚠ O anfitrião precisa manter a página aberta para os convidados continuarem conectados.</p>
+              <button id="create-room" class="primary-button" type="button" style="margin-top:16px">
+                Criar sala <span aria-hidden="true">→</span>
+              </button>
+              <p id="create-room-error" class="mp-error" hidden></p>
             </div>
 
             <div id="mp-guest-panel" class="mp-panel" hidden>
@@ -122,11 +126,54 @@
                 <input id="room-code-input" class="nickname-input room-code-input" maxlength="12" placeholder="Ex.: A3F9K2" autocomplete="off" spellcheck="false" aria-describedby="join-help" />
                 <button id="join-room" class="primary-button mp-join-button" type="button">Entrar na sala</button>
               </div>
-              <p id="join-help" class="helper-text">Você verá o draft em tempo real e poderá reivindicar um assento de treinador ou apenas assistir.</p>
+              <p id="join-help" class="helper-text">Você entra no lobby, escolhe seu apelido e espera o anfitrião iniciar o draft.</p>
               <p id="join-error" class="mp-error" hidden></p>
             </div>
 
           </section>
+        </section>
+
+        <section id="lobby-screen" class="lobby-screen" hidden aria-labelledby="lobby-title">
+          <div class="lobby-header">
+            <div>
+              <p class="eyebrow">LOBBY ONLINE</p>
+              <h1 id="lobby-title">Sala de espera</h1>
+              <p id="lobby-description" class="draft-description">Entre com seu apelido e aguarde o anfitrião iniciar o draft.</p>
+            </div>
+            <button id="lobby-back" class="secondary-button compact-button" type="button">← Menu principal</button>
+          </div>
+
+          <div class="lobby-layout">
+            <section class="setup-card lobby-players-card" aria-labelledby="lobby-players-title">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">TREINADORES</p>
+                  <h2 id="lobby-players-title">Quem já entrou</h2>
+                </div>
+                <span id="lobby-count" class="selection-label">0 / 0</span>
+              </div>
+              <div id="lobby-player-list" class="lobby-player-list"></div>
+            </section>
+
+            <section class="setup-card lobby-self-card" aria-labelledby="lobby-self-title">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">SEU ASSENTO</p>
+                  <h2 id="lobby-self-title">Seu apelido</h2>
+                </div>
+              </div>
+              <label class="field-label" for="lobby-nickname">Apelido no draft</label>
+              <input id="lobby-nickname" class="nickname-input" maxlength="18" placeholder="Ex.: Ash" autocomplete="nickname" />
+              <button id="lobby-confirm" class="primary-button" type="button" style="margin-top:14px">
+                Confirmar e sentar <span aria-hidden="true">→</span>
+              </button>
+              <p id="lobby-self-status" class="helper-text" style="margin-top:12px"></p>
+              <button id="lobby-start" class="primary-button" type="button" hidden style="margin-top:18px">
+                Iniciar draft <span aria-hidden="true">→</span>
+              </button>
+              <p id="lobby-host-hint" class="helper-text" hidden style="margin-top:10px">É preciso pelo menos 2 treinadores sentados para iniciar.</p>
+            </section>
+          </div>
         </section>
 
         <section id="draft-screen" class="draft-screen" hidden aria-live="polite">
@@ -139,16 +186,6 @@
             <div class="draft-header-actions">
               <button id="back-to-menu" class="secondary-button compact-button" type="button">← Menu principal</button>
               <div id="draft-progress" class="draft-progress" aria-label="Progresso do draft"></div>
-            </div>
-          </div>
-
-          <div id="seat-picker" class="seat-picker" hidden>
-            <div class="seat-picker-card">
-              <p class="eyebrow">ASSENTO</p>
-              <h2>Quem você controla?</h2>
-              <p class="helper-text">Escolha o treinador cujo turno você vai jogar, ou assista sem controlar ninguém.</p>
-              <div id="seat-list" class="seat-list"></div>
-              <button id="spectate-btn" class="secondary-button" type="button">Apenas assistir</button>
             </div>
           </div>
 

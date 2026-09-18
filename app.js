@@ -97,6 +97,9 @@ const state = {
   cryAudio: null,
   cryVolume: 0.46,
   draftStarted: false,
+  phase: null, // null | "lobby" | "draft"
+  lobbyPlayers: [], // [{ peerId, nickname, seatIndex }]
+  maxPlayers: 4,
 };
 
 const net = {
@@ -147,9 +150,19 @@ const el = {
   roomLinkDisplay: document.querySelector("#room-link-display"),
   copyRoomLink: document.querySelector("#copy-room-link"),
   copyFeedback: document.querySelector("#copy-feedback"),
-  seatPicker: document.querySelector("#seat-picker"),
-  seatList: document.querySelector("#seat-list"),
-  spectateBtn: document.querySelector("#spectate-btn"),
+  createRoom: document.querySelector("#create-room"),
+  createRoomError: document.querySelector("#create-room-error"),
+  lobby: document.querySelector("#lobby-screen"),
+  lobbyPlayerList: document.querySelector("#lobby-player-list"),
+  lobbyCount: document.querySelector("#lobby-count"),
+  lobbyDescription: document.querySelector("#lobby-description"),
+  lobbyNickname: document.querySelector("#lobby-nickname"),
+  lobbyConfirm: document.querySelector("#lobby-confirm"),
+  lobbyStart: document.querySelector("#lobby-start"),
+  lobbySelfStatus: document.querySelector("#lobby-self-status"),
+  lobbyHostHint: document.querySelector("#lobby-host-hint"),
+  lobbyBack: document.querySelector("#lobby-back"),
+  playerHelp: document.querySelector("#player-help"),
   regionCard: document.querySelector(".region-card"),
   playersCard: document.querySelector(".players-card"),
 };
@@ -335,6 +348,9 @@ function serializeSnapshot() {
     seenCandidates: [...state.seenCandidates],
     loading: state.loading,
     draftStarted: state.draftStarted,
+    phase: state.phase,
+    lobbyPlayers: state.lobbyPlayers.map((p) => ({ ...p })),
+    maxPlayers: state.maxPlayers,
     seats: { ...net.seats },
   };
 }
@@ -360,6 +376,9 @@ function applySnapshot(snapshot) {
   state.seenCandidates = new Set(snapshot.seenCandidates || []);
   state.loading = Boolean(snapshot.loading);
   state.draftStarted = Boolean(snapshot.draftStarted);
+  state.phase = snapshot.phase || (snapshot.draftStarted ? "draft" : null);
+  state.lobbyPlayers = (snapshot.lobbyPlayers || []).map((p) => ({ ...p }));
+  state.maxPlayers = Number(snapshot.maxPlayers) || state.maxPlayers || 4;
   net.seats = { ...(snapshot.seats || {}) };
 
   state.teams.forEach((team) => {
@@ -367,33 +386,55 @@ function applySnapshot(snapshot) {
   });
   if (state.candidate?.name) state.cache.set(state.candidate.name, state.candidate);
 
-  if (state.draftStarted) {
+  syncLocalSeatFromSnapshot();
+
+  if (state.phase === "lobby" || state.phase === "draft" || state.draftStarted) {
     el.setup.hidden = true;
-    el.draft.hidden = false;
     el.newDraft.hidden = false;
     const region = currentRegion();
     if (region) el.gameContext.textContent = `${region.name} · ${region.games}`;
+  }
+
+  if (state.phase === "lobby") {
+    el.draft.hidden = true;
+    if (el.lobby) el.lobby.hidden = false;
+    if (net.roomId) showRoomShare(net.roomId);
+    renderLobby();
+  } else if (state.phase === "draft" || state.draftStarted) {
+    if (el.lobby) el.lobby.hidden = true;
+    el.draft.hidden = false;
   }
 
   if (net.role === "guest" && state.candidate?.name && state.candidate.name !== prevCandidateName) {
     queueCry(state.candidate);
   }
 
-  // Keep local seatIndex in sync with seats map for this peer
-  if (net.role === "guest" && net.peer?.id) {
-    const mapped = net.seats[net.peer.id];
-    if (mapped != null) {
-      net.seatIndex = mapped;
-      net.guestDecidedSeat = true;
-    } else if (net.guestDecidedSeat && net.seatIndex != null && !(net.peer.id in net.seats)) {
-      // Host cleared our seat
-      net.seatIndex = null;
-    }
-  }
-
   updateNetStatus();
-  updateSeatPicker();
-  if (state.draftStarted) renderDraft();
+  if (state.phase === "draft" || state.draftStarted) renderDraft();
+}
+
+function syncLocalSeatFromSnapshot() {
+  const myId = net.role === "host" ? hostPeerId() : net.peer?.id;
+  if (!myId) return;
+  if (state.phase === "lobby") {
+    const lobbySeat = state.lobbyPlayers.find((p) => p.peerId === myId);
+    if (lobbySeat) {
+      net.seatIndex = lobbySeat.seatIndex;
+      net.guestDecidedSeat = true;
+    } else {
+      net.seatIndex = null;
+      net.guestDecidedSeat = false;
+    }
+    return;
+  }
+  const mapped = net.seats[myId];
+  if (mapped != null) {
+    net.seatIndex = mapped;
+    net.guestDecidedSeat = true;
+  } else if (net.guestDecidedSeat) {
+    net.seatIndex = null;
+    net.guestDecidedSeat = false;
+  }
 }
 
 function broadcastState() {
@@ -429,10 +470,18 @@ function updateNetStatus() {
     el.netStatus.classList.add("is-host");
     return;
   }
+  if (net.roomId && state.phase === "lobby") {
+    const myId = net.role === "host" ? hostPeerId() : net.peer?.id;
+    const me = state.lobbyPlayers.find((p) => p.peerId === myId);
+    const seat = me ? ` · ${me.nickname}` : " · Lobby";
+    el.netStatus.textContent = `Sala ${net.roomId} · ${net.role === "host" ? "Host" : "Guest"}${seat}`;
+    el.netStatus.classList.add(net.role === "host" ? "is-host" : "is-guest");
+    return;
+  }
   if (net.role === "guest" && net.roomId) {
     const seat = net.seatIndex != null && state.teams[net.seatIndex]
       ? ` · ${state.teams[net.seatIndex].name}`
-      : net.guestDecidedSeat ? " · Espectador" : "";
+      : "";
     el.netStatus.textContent = `Sala ${net.roomId} · Conectado como Guest${seat}`;
     el.netStatus.classList.add("is-guest");
     return;
@@ -484,13 +533,47 @@ function seatOwnerPeerId(teamIndex) {
 
 function canControlSeat(teamIndex) {
   if (net.role === "local") return true;
-  if (net.role === "host") return true;
-  if (net.role === "guest") return net.seatIndex === teamIndex;
+  // Online: only the seated client for that index (host included)
+  if (net.role === "host" || net.role === "guest") return net.seatIndex === teamIndex;
   return false;
 }
 
 function isInteractiveClient() {
-  return net.role === "local" || net.role === "host" || (net.role === "guest" && canControlSeat(activeTurnPlayerIndex()));
+  return canControlSeat(activeTurnPlayerIndex());
+}
+
+function hostPeerId() {
+  return net.peer?.id || "__host__";
+}
+
+function seatedLobbyPlayers() {
+  return [...state.lobbyPlayers]
+    .filter((p) => p && p.nickname && Number.isInteger(p.seatIndex))
+    .sort((a, b) => a.seatIndex - b.seatIndex);
+}
+
+function nextFreeLobbySeat() {
+  const taken = new Set(state.lobbyPlayers.map((p) => p.seatIndex));
+  for (let i = 0; i < state.maxPlayers; i += 1) {
+    if (!taken.has(i)) return i;
+  }
+  return -1;
+}
+
+function upsertLobbyPlayer(peerId, nickname, seatIndex) {
+  const existing = state.lobbyPlayers.find((p) => p.peerId === peerId);
+  if (existing) {
+    existing.nickname = nickname;
+    existing.seatIndex = seatIndex;
+  } else {
+    state.lobbyPlayers.push({ peerId, nickname, seatIndex });
+  }
+  net.seats[peerId] = seatIndex;
+}
+
+function removeLobbyPlayer(peerId) {
+  state.lobbyPlayers = state.lobbyPlayers.filter((p) => p.peerId !== peerId);
+  if (net.seats[peerId] != null) delete net.seats[peerId];
 }
 
 function sendGuestAction(action, payload = {}) {
@@ -518,11 +601,25 @@ function setMpMode(mode) {
   });
   if (el.mpHostPanel) el.mpHostPanel.hidden = mode !== "host";
   if (el.mpGuestPanel) el.mpGuestPanel.hidden = mode !== "guest";
-  const hideSetupForms = mode === "guest";
-  if (el.regionCard) el.regionCard.hidden = hideSetupForms;
-  if (el.playersCard) el.playersCard.hidden = hideSetupForms;
-  if (el.start) el.start.hidden = hideSetupForms;
+  const guestOnly = mode === "guest";
+  const hostMode = mode === "host";
+  if (el.regionCard) el.regionCard.hidden = guestOnly;
+  if (el.playersCard) el.playersCard.hidden = guestOnly;
+  if (el.start) el.start.hidden = guestOnly || hostMode;
+  if (el.nicknameFields) el.nicknameFields.hidden = hostMode;
+  if (el.playerHelp) {
+    el.playerHelp.textContent = hostMode
+      ? "No online, cada treinador escolhe o próprio apelido no lobby. Aqui você só define o máximo de assentos."
+      : "Dê um apelido a cada treinador. O quadro do draft se ajusta a eles.";
+  }
   showJoinError("");
+  showCreateRoomError("");
+}
+
+function showCreateRoomError(message) {
+  if (!el.createRoomError) return;
+  el.createRoomError.hidden = !message;
+  el.createRoomError.textContent = message || "";
 }
 
 function wireHostConnection(conn) {
@@ -546,11 +643,12 @@ function wireHostConnection(conn) {
 
   conn.on("close", () => {
     net.connections.delete(conn.peer);
-    if (net.seats[conn.peer] != null) delete net.seats[conn.peer];
+    removeLobbyPlayer(conn.peer);
     net.connectedPeers = net.connections.size;
     updateNetStatus();
     notifyStateChanged();
-    if (state.draftStarted) renderDraft();
+    if (state.phase === "lobby") renderLobby();
+    else if (state.draftStarted) renderDraft();
   });
 
   conn.on("error", () => {
@@ -724,28 +822,49 @@ function canGuestActOnSeat(peerId, teamIndex) {
 async function handleHostAction(peerId, action, payload) {
   if (net.role !== "host") return;
 
-  if (action === "claimSeat") {
-    const teamIndex = Number(payload.teamIndex);
-    if (!Number.isInteger(teamIndex) || teamIndex < 0 || teamIndex >= state.teams.length) return;
-    const takenByOther = Object.entries(net.seats).some(([id, idx]) => idx === teamIndex && id !== peerId);
+  if (action === "joinLobby" || action === "setNickname" || action === "claimSeat") {
+    if (state.phase !== "lobby") {
+      const conn = net.connections.get(peerId);
+      if (conn?.open) conn.send({ type: "error", message: "O draft já começou. Não é possível mudar de assento." });
+      return;
+    }
+    const nickname = String(payload.nickname || "").trim().slice(0, 18);
+    if (!nickname) {
+      const conn = net.connections.get(peerId);
+      if (conn?.open) conn.send({ type: "error", message: "Informe um apelido." });
+      return;
+    }
+    let seatIndex = Number(payload.seatIndex);
+    const existing = state.lobbyPlayers.find((p) => p.peerId === peerId);
+    if (!Number.isInteger(seatIndex) || seatIndex < 0) {
+      seatIndex = existing ? existing.seatIndex : nextFreeLobbySeat();
+    }
+    if (seatIndex < 0 || seatIndex >= state.maxPlayers) {
+      const conn = net.connections.get(peerId);
+      if (conn?.open) conn.send({ type: "error", message: "A sala está cheia." });
+      return;
+    }
+    const takenByOther = state.lobbyPlayers.some((p) => p.seatIndex === seatIndex && p.peerId !== peerId);
     if (takenByOther) {
       const conn = net.connections.get(peerId);
       if (conn?.open) conn.send({ type: "error", message: "Este assento já foi reivindicado." });
       return;
     }
-    delete net.seats[peerId];
-    net.seats[peerId] = teamIndex;
+    upsertLobbyPlayer(peerId, nickname, seatIndex);
     notifyStateChanged();
-    renderDraft();
+    renderLobby();
     return;
   }
 
-  if (action === "spectate") {
-    delete net.seats[peerId];
+  if (action === "leaveSeat") {
+    if (state.phase !== "lobby") return;
+    removeLobbyPlayer(peerId);
     notifyStateChanged();
-    renderDraft();
+    renderLobby();
     return;
   }
+
+  if (state.phase !== "draft" && !state.draftStarted) return;
 
   const turnIndex = activeTurnPlayerIndex();
 
@@ -784,53 +903,109 @@ async function handleHostAction(peerId, action, payload) {
   }
 }
 
-function updateSeatPicker() {
-  if (!el.seatPicker) return;
-  const show = net.role === "guest" && state.draftStarted && !net.guestDecidedSeat;
-  el.seatPicker.hidden = !show;
-  if (!show) return;
-
-  el.seatList.innerHTML = "";
-  state.teams.forEach((team, index) => {
-    const owner = seatOwnerPeerId(index);
-    const mine = net.seatIndex === index;
-    const taken = owner && owner !== net.peer?.id;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `seat-option${mine ? " is-mine" : ""}`;
-    btn.disabled = Boolean(taken);
-    btn.innerHTML = `<span>${escapeHTML(team.name)}</span><span class="seat-option-meta">${taken ? "Ocupado" : mine ? "Seu assento" : `${team.pokemon.length}/6`}</span>`;
-    btn.addEventListener("click", () => {
-      net.seatIndex = index;
-      net.guestDecidedSeat = true;
-      sendGuestAction("claimSeat", { teamIndex: index });
-      updateSeatPicker();
-      updateNetStatus();
-      renderDraft();
-    });
-    el.seatList.append(btn);
-  });
-}
-
-function claimSpectate() {
-  net.seatIndex = null;
-  net.guestDecidedSeat = true;
-  sendGuestAction("spectate");
-  updateSeatPicker();
-  updateNetStatus();
-  renderDraft();
-}
-
 function lockedNoteMarkup() {
-  if (isInteractiveClient() || net.role === "local") return "";
+  if (isInteractiveClient()) return "";
   const name = state.teams[activeTurnPlayerIndex()]?.name || "outro treinador";
-  if (net.role === "guest" && !net.guestDecidedSeat) {
-    return `<p class="action-locked-note">Escolha um assento acima para jogar, ou assista ao draft.</p>`;
-  }
-  if (net.role === "guest" && net.seatIndex == null) {
-    return `<p class="action-locked-note">Você está assistindo. Aguardando a jogada de <strong>${escapeHTML(name)}</strong>.</p>`;
+  if ((net.role === "guest" || net.role === "host") && net.seatIndex == null) {
+    return `<p class="action-locked-note">Você não tem assento neste draft. Aguardando a jogada de <strong>${escapeHTML(name)}</strong>.</p>`;
   }
   return `<p class="action-locked-note">Aguardando a jogada de <strong>${escapeHTML(name)}</strong>.</p>`;
+}
+
+function showLobbyScreen() {
+  el.setup.hidden = true;
+  el.draft.hidden = true;
+  if (el.lobby) el.lobby.hidden = false;
+  el.newDraft.hidden = false;
+  const region = currentRegion();
+  if (region) el.gameContext.textContent = `${region.name} · ${region.games}`;
+  renderLobby();
+}
+
+function renderLobby() {
+  if (!el.lobby || el.lobby.hidden) return;
+  const seated = seatedLobbyPlayers();
+  if (el.lobbyCount) el.lobbyCount.textContent = `${seated.length} / ${state.maxPlayers}`;
+  if (el.lobbyDescription) {
+    el.lobbyDescription.textContent = net.role === "host"
+      ? "Compartilhe o link, confirme seu apelido e inicie quando houver pelo menos 2 treinadores."
+      : "Confirme seu apelido para sentar e aguarde o anfitrião iniciar o draft.";
+  }
+
+  if (el.lobbyPlayerList) {
+    el.lobbyPlayerList.innerHTML = "";
+    for (let seat = 0; seat < state.maxPlayers; seat += 1) {
+      const player = state.lobbyPlayers.find((p) => p.seatIndex === seat);
+      const row = document.createElement("div");
+      const myId = net.role === "host" ? hostPeerId() : net.peer?.id;
+      const isMine = Boolean(player && player.peerId === myId);
+      const isHostSeat = Boolean(player && player.peerId === hostPeerId());
+      row.className = `lobby-player-row${player ? "" : " is-empty"}${isMine ? " is-mine" : ""}${isHostSeat ? " is-host-seat" : ""}`;
+      if (player) {
+        row.innerHTML = `<span class="lobby-player-name">${escapeHTML(player.nickname)}</span><span class="lobby-player-meta">Assento ${seat + 1}${isHostSeat ? " · Anfitrião" : ""}${isMine ? " · Você" : ""}</span>`;
+      } else {
+        row.innerHTML = `<span class="lobby-player-name">Assento ${seat + 1}</span><span class="lobby-player-meta">Livre</span>`;
+      }
+      el.lobbyPlayerList.append(row);
+    }
+  }
+
+  const myId = net.role === "host" ? hostPeerId() : net.peer?.id;
+  const me = state.lobbyPlayers.find((p) => p.peerId === myId);
+  if (el.lobbyNickname && me && document.activeElement !== el.lobbyNickname) {
+    el.lobbyNickname.value = me.nickname;
+  }
+  if (el.lobbySelfStatus) {
+    el.lobbySelfStatus.textContent = me
+      ? `Você está sentado como ${me.nickname} (assento ${me.seatIndex + 1}).`
+      : "Digite um apelido e confirme para entrar no lobby.";
+  }
+  if (el.lobbyConfirm) {
+    el.lobbyConfirm.innerHTML = me
+      ? "Atualizar apelido"
+      : 'Confirmar e sentar <span aria-hidden="true">→</span>';
+  }
+
+  const isHost = net.role === "host";
+  if (el.lobbyStart) {
+    el.lobbyStart.hidden = !isHost;
+    el.lobbyStart.disabled = seated.length < 2;
+  }
+  if (el.lobbyHostHint) {
+    el.lobbyHostHint.hidden = !isHost;
+    el.lobbyHostHint.textContent = seated.length < 2
+      ? "É preciso pelo menos 2 treinadores sentados para iniciar."
+      : `${seated.length} treinadores prontos. Você pode iniciar o draft.`;
+  }
+  updateNetStatus();
+}
+
+function confirmLobbyNickname() {
+  const nickname = String(el.lobbyNickname?.value || "").trim().slice(0, 18);
+  if (!nickname) {
+    if (el.lobbySelfStatus) el.lobbySelfStatus.textContent = "Informe um apelido para continuar.";
+    return;
+  }
+  if (net.role === "host") {
+    const peerId = hostPeerId();
+    const existing = state.lobbyPlayers.find((p) => p.peerId === peerId);
+    let seat = existing ? existing.seatIndex : 0;
+    const taken = state.lobbyPlayers.some((p) => p.seatIndex === seat && p.peerId !== peerId);
+    if (taken) seat = nextFreeLobbySeat();
+    if (seat < 0) {
+      if (el.lobbySelfStatus) el.lobbySelfStatus.textContent = "A sala está cheia.";
+      return;
+    }
+    upsertLobbyPlayer(peerId, nickname, seat);
+    net.seatIndex = seat;
+    net.guestDecidedSeat = true;
+    notifyStateChanged();
+    renderLobby();
+    return;
+  }
+  if (net.role === "guest") {
+    sendGuestAction("joinLobby", { nickname });
+  }
 }
 
 function renderRegions() {
@@ -915,9 +1090,7 @@ async function hydrateBatch(items) {
   await Promise.all(items.map((item) => hydratePokemon(item)));
 }
 
-function freshStart() {
-  const names = [...el.nicknameFields.querySelectorAll("input")].map((input, index) => input.value.trim() || `Treinador ${index + 1}`);
-  state.teams = names.map((name, index) => ({ id: index, name, pokemon: [] }));
+function resetDraftRuntime() {
   state.dex = [];
   state.cache.clear();
   state.stageIndex = -1;
@@ -932,16 +1105,19 @@ function freshStart() {
   stopCries();
 }
 
-async function startDraft() {
-  if (net.mode === "guest") return;
+function freshStartFromNames(names) {
+  state.teams = names.map((name, index) => ({ id: index, name, pokemon: [] }));
+  resetDraftRuntime();
+  state.phase = null;
+}
 
-  freshStart();
+function freshStart() {
+  const names = [...el.nicknameFields.querySelectorAll("input")].map((input, index) => input.value.trim() || `Treinador ${index + 1}`);
+  freshStartFromNames(names);
+}
+
+async function prepareDexAndBeginDraft() {
   const region = currentRegion();
-  el.start.disabled = true;
-  el.start.textContent = "Preparando Pokédex…";
-  el.setup.hidden = true;
-  el.draft.hidden = false;
-  el.newDraft.hidden = false;
   el.gameContext.textContent = `${region.name} · ${region.games}`;
   el.draftOverline.textContent = "CARREGANDO POKÉDEX";
   el.draftTitle.textContent = `Abrindo ${region.name}…`;
@@ -949,25 +1125,6 @@ async function startDraft() {
   renderProgress();
   renderTeams();
   el.action.innerHTML = loadingMarkup("Separando encontros e escolhas disponíveis…");
-
-  if (net.mode === "host") {
-    try {
-      el.draftDescription.textContent = "Criando sala online…";
-      await createHostRoom();
-    } catch (error) {
-      el.draftTitle.textContent = "Não foi possível criar a sala.";
-      el.draftDescription.textContent = error.message || "Falha no PeerJS. Tente novamente ou jogue localmente.";
-      el.action.innerHTML = `<div class="empty-pool">${escapeHTML(error.message || "Erro PeerJS")}</div>`;
-      el.start.disabled = false;
-      el.start.innerHTML = "Iniciar PokeDraft <span aria-hidden=\"true\">→</span>";
-      return;
-    }
-  } else {
-    net.role = "local";
-    destroyPeer();
-    net.role = "local";
-    updateNetStatus();
-  }
 
   try {
     state.dex = includeKalosGuestStarters(await fetchDex(region), region);
@@ -985,18 +1142,123 @@ async function startDraft() {
     el.draftTitle.textContent = "Não foi possível validar as evoluções.";
     el.draftDescription.textContent = "Verifique sua conexão e inicie novamente para montar a Pokédex final.";
     el.action.innerHTML = `<div class="empty-pool">A validação das evoluções depende da PokéAPI. Tente iniciar o draft novamente.</div>`;
-    el.start.disabled = false;
-    el.start.innerHTML = "Iniciar PokeDraft <span aria-hidden=\"true\">→</span>";
-    return;
+    throw error;
   }
   await assignStarters();
   state.stageIndex = 0;
   beginStageTurns("pick");
   state.draftStarted = true;
+  state.phase = "draft";
   renderDraft();
   notifyStateChanged();
-  el.start.disabled = false;
-  el.start.innerHTML = "Iniciar PokeDraft <span aria-hidden=\"true\">→</span>";
+}
+
+async function startDraft() {
+  // Local-only entry point
+  if (net.mode !== "local") return;
+
+  freshStart();
+  net.role = "local";
+  destroyPeer();
+  net.role = "local";
+  updateNetStatus();
+
+  el.start.disabled = true;
+  el.start.textContent = "Preparando Pokédex…";
+  el.setup.hidden = true;
+  if (el.lobby) el.lobby.hidden = true;
+  el.draft.hidden = false;
+  el.newDraft.hidden = false;
+
+  try {
+    await prepareDexAndBeginDraft();
+  } catch (_) {
+    // error UI already set
+  } finally {
+    el.start.disabled = false;
+    el.start.innerHTML = 'Iniciar PokeDraft <span aria-hidden="true">→</span>';
+  }
+}
+
+async function createRoomAndEnterLobby() {
+  if (net.mode !== "host") return;
+  showCreateRoomError("");
+  if (el.createRoom) {
+    el.createRoom.disabled = true;
+    el.createRoom.textContent = "Criando sala…";
+  }
+
+  state.maxPlayers = Number(el.playerCount.value) || 4;
+  state.lobbyPlayers = [];
+  state.teams = [];
+  resetDraftRuntime();
+  state.phase = "lobby";
+  net.seats = {};
+  net.seatIndex = null;
+  net.guestDecidedSeat = false;
+
+  try {
+    await createHostRoom();
+    showLobbyScreen();
+    showRoomShare(net.roomId);
+    notifyStateChanged();
+  } catch (error) {
+    state.phase = null;
+    showCreateRoomError(error.message || "Falha ao criar a sala.");
+  } finally {
+    if (el.createRoom) {
+      el.createRoom.disabled = false;
+      el.createRoom.innerHTML = 'Criar sala <span aria-hidden="true">→</span>';
+    }
+  }
+}
+
+async function startDraftFromLobby() {
+  if (net.role !== "host" || state.phase !== "lobby") return;
+  const seated = seatedLobbyPlayers();
+  if (seated.length < 2) {
+    if (el.lobbyHostHint) el.lobbyHostHint.textContent = "É preciso pelo menos 2 treinadores sentados para iniciar.";
+    return;
+  }
+
+  const ordered = seated;
+  state.lobbyPlayers = ordered.map((p, index) => ({
+    peerId: p.peerId,
+    nickname: p.nickname,
+    seatIndex: index,
+  }));
+  net.seats = {};
+  state.lobbyPlayers.forEach((p) => { net.seats[p.peerId] = p.seatIndex; });
+  net.seatIndex = net.seats[hostPeerId()] ?? null;
+  net.guestDecidedSeat = net.seatIndex != null;
+
+  freshStartFromNames(ordered.map((p) => p.nickname));
+  state.phase = "draft";
+
+  if (el.lobby) el.lobby.hidden = true;
+  el.draft.hidden = false;
+  el.newDraft.hidden = false;
+  if (el.lobbyStart) {
+    el.lobbyStart.disabled = true;
+    el.lobbyStart.textContent = "Preparando Pokédex…";
+  }
+
+  try {
+    await prepareDexAndBeginDraft();
+  } catch (_) {
+    state.phase = "lobby";
+    state.draftStarted = false;
+    if (el.lobby) {
+      el.draft.hidden = true;
+      el.lobby.hidden = false;
+      renderLobby();
+    }
+  } finally {
+    if (el.lobbyStart) {
+      el.lobbyStart.disabled = false;
+      el.lobbyStart.innerHTML = 'Iniciar draft <span aria-hidden="true">→</span>';
+    }
+  }
 }
 
 async function assignStarters() {
@@ -1033,8 +1295,8 @@ function renderTeams() {
     const row = document.createElement("section");
     const finished = team.pokemon.length === 6;
     const owner = seatOwnerPeerId(index);
-    const isMine = net.role === "guest" && net.seatIndex === index;
-    const seatBadge = isMine ? `<span class="seat-badge">Você</span>` : (owner && net.role === "host" ? `<span class="seat-badge">Online</span>` : "");
+    const isMine = (net.role === "guest" || net.role === "host") && net.seatIndex === index;
+    const seatBadge = isMine ? `<span class="seat-badge">Você</span>` : (owner && net.role !== "local" ? `<span class="seat-badge">Online</span>` : "");
     row.innerHTML = `<div class="trainer-heading"><span class="trainer-name">${escapeHTML(team.name)}${seatBadge}</span><span class="trainer-state">${team.pokemon.length}/6 ${finished ? "· pronto" : ""}</span></div><div class="team-slots"></div>`;
     const slots = row.querySelector(".team-slots");
     for (let slot = 0; slot < 6; slot += 1) {
@@ -1067,7 +1329,6 @@ function escapeHTML(value) { return String(value).replace(/[&<>'"]/g, (char) => 
 function loadingMarkup(message) { return `<div class="encounter-loading"><div><div class="loading-orb" aria-hidden="true"></div><p>${message}</p></div></div>`; }
 
 function renderDraft() {
-  updateSeatPicker();
   renderProgress();
   renderTeams();
   if (state.stageIndex >= STAGES.length && !state.replacement) return renderFinish();
@@ -1124,15 +1385,8 @@ function renderPick(active, activeTeam, isReplacement) {
       }
       poolNode.append(card);
     });
-    if (net.role !== "guest") {
-      await hydrateBatch(candidates);
-      candidates.forEach((pokemon) => updatePokemonCard(poolNode.querySelector(`[data-pokemon="${pokemon.name}"]`), state.cache.get(pokemon.name)));
-    } else {
-      candidates.forEach((pokemon) => {
-        const cached = state.cache.get(pokemon.name);
-        if (cached) updatePokemonCard(poolNode.querySelector(`[data-pokemon="${pokemon.name}"]`), cached);
-      });
-    }
+    await hydrateBatch(candidates);
+    candidates.forEach((pokemon) => updatePokemonCard(poolNode.querySelector(`[data-pokemon="${pokemon.name}"]`), state.cache.get(pokemon.name)));
   };
   if (input) input.addEventListener("input", draw);
   draw();
@@ -1359,7 +1613,10 @@ function returnToSetup() {
   net.role = "local";
   setMpMode("local");
   state.draftStarted = false;
-  if (el.seatPicker) el.seatPicker.hidden = true;
+  state.phase = null;
+  state.lobbyPlayers = [];
+  state.teams = [];
+  if (el.lobby) el.lobby.hidden = true;
   el.draft.hidden = true;
   el.setup.hidden = false;
   el.newDraft.hidden = true;
@@ -1383,12 +1640,23 @@ async function handleJoinClick() {
   try {
     await joinHostRoom(code);
     el.setup.hidden = true;
-    el.draft.hidden = false;
     el.newDraft.hidden = false;
-    el.draftOverline.textContent = "SALA ONLINE";
-    el.draftTitle.textContent = "Conectado — aguardando estado…";
-    el.draftDescription.textContent = "Sincronizando o draft com o anfitrião.";
-    el.action.innerHTML = loadingMarkup("Recebendo o estado da sala…");
+    if (state.phase === "lobby") {
+      showLobbyScreen();
+      if (net.roomId) showRoomShare(net.roomId);
+    } else if (state.phase === "draft" || state.draftStarted) {
+      if (el.lobby) el.lobby.hidden = true;
+      el.draft.hidden = false;
+      el.draftOverline.textContent = "SALA ONLINE";
+      el.draftTitle.textContent = "Conectado — sincronizando…";
+      el.draftDescription.textContent = "Recebendo o estado do draft.";
+      el.action.innerHTML = loadingMarkup("Recebendo o estado da sala…");
+    } else {
+      if (el.lobby) el.lobby.hidden = false;
+      el.draft.hidden = true;
+      if (el.lobbyDescription) el.lobbyDescription.textContent = "Conectado — aguardando o lobby do anfitrião…";
+      renderLobby();
+    }
   } catch (error) {
     showJoinError(error.message || "Falha ao entrar na sala.");
   } finally {
@@ -1429,10 +1697,12 @@ el.playerCount.addEventListener("change", renderNicknameFields);
 el.start.addEventListener("click", startDraft);
 el.newDraft.addEventListener("click", returnToSetup);
 el.backToMenu.addEventListener("click", returnToSetup);
+if (el.lobbyBack) el.lobbyBack.addEventListener("click", returnToSetup);
 
 document.querySelectorAll(".mp-mode-option").forEach((btn) => {
   btn.addEventListener("click", () => setMpMode(btn.dataset.mode));
 });
+if (el.createRoom) el.createRoom.addEventListener("click", createRoomAndEnterLobby);
 if (el.joinRoom) el.joinRoom.addEventListener("click", handleJoinClick);
 if (el.roomCodeInput) {
   el.roomCodeInput.addEventListener("keydown", (event) => {
@@ -1440,7 +1710,13 @@ if (el.roomCodeInput) {
   });
 }
 if (el.copyRoomLink) el.copyRoomLink.addEventListener("click", copyRoomLink);
-if (el.spectateBtn) el.spectateBtn.addEventListener("click", claimSpectate);
+if (el.lobbyConfirm) el.lobbyConfirm.addEventListener("click", confirmLobbyNickname);
+if (el.lobbyNickname) {
+  el.lobbyNickname.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") confirmLobbyNickname();
+  });
+}
+if (el.lobbyStart) el.lobbyStart.addEventListener("click", startDraftFromLobby);
 
 if (el.cryVolume) {
   let savedVolume = 46;
