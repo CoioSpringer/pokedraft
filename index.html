@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080808" />
+    <title>PokeDraft — monte seu time</title>
+    <link rel="preconnect" href="https://pokeapi.co" />
+    <link rel="preconnect" href="https://raw.githubusercontent.com" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="PokeDraft, início">
+          <span class="brand-mark" aria-hidden="true"><span></span></span>
+          <span>POKE<span>DRAFT</span></span>
+        </a>
+        <div class="topbar-actions">
+          <span id="net-status" class="net-status-pill" aria-live="polite">Local</span>
+          <label class="volume-control" for="cry-volume" title="Volume dos cries">
+            <span class="volume-icon" aria-hidden="true">♪</span>
+            <span class="sr-only">Volume dos cries</span>
+            <input id="cry-volume" type="range" min="0" max="100" value="46" step="1" aria-label="Volume dos cries dos Pokémon" />
+            <span id="cry-volume-value" class="volume-value" aria-hidden="true">46%</span>
+          </label>
+          <span id="game-context" class="game-context">Preparar um novo draft</span>
+          <button id="new-draft" class="text-button" type="button" hidden>Menu principal</button>
+        </div>
+      </header>
+
+      <main>
+        <div id="mp-room-share" class="mp-room-share mp-room-banner" hidden>
+              <p class="eyebrow">SALA ATIVA</p>
+              <div class="mp-share-row">
+                <div>
+                  <span class="mp-share-label">Código</span>
+                  <strong id="room-code-display" class="mp-room-code">————</strong>
+                </div>
+                <button id="copy-room-link" class="secondary-button compact-button" type="button">Copiar link</button>
+              </div>
+              <p id="room-link-display" class="mp-room-link"></p>
+              <p class="mp-host-note">Mantenha esta aba aberta. Se o anfitrião fechar a página, a sala encerra.</p>
+              <p id="copy-feedback" class="mp-copy-feedback" hidden>Link copiado!</p>
+            </div>
+
+        <section id="setup-screen" class="setup-screen" aria-labelledby="setup-title">
+          <div class="setup-intro">
+            <p class="eyebrow">SIMULADOR DE TIMES</p>
+            <h1 id="setup-title">Seu time começa<br />no <em>inesperado.</em></h1>
+            <p>Escolha a região, reúna os treinadores e deixe o PokeDraft conduzir cada encontro até fechar seis Pokémon.</p>
+          </div>
+
+          <div class="setup-layout">
+            <section class="setup-card region-card" aria-labelledby="region-title">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">01 · REGIÃO</p>
+                  <h2 id="region-title">Escolha a aventura</h2>
+                </div>
+                <span id="selected-game-label" class="selection-label">Kanto</span>
+              </div>
+              <div id="region-grid" class="region-grid" role="radiogroup" aria-label="Região do draft"></div>
+              <p id="game-description" class="helper-text"></p>
+            </section>
+
+            <section class="setup-card players-card" aria-labelledby="players-title">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">02 · TREINADORES</p>
+                  <h2 id="players-title">Quem está no draft?</h2>
+                </div>
+              </div>
+              <label class="field-label" for="player-count">Número de jogadores</label>
+              <select id="player-count" class="select-control" aria-describedby="player-help">
+                <option value="2">2 jogadores</option>
+                <option value="3">3 jogadores</option>
+                <option value="4">4 jogadores</option>
+                <option value="5">5 jogadores</option>
+                <option value="6">6 jogadores</option>
+                <option value="7">7 jogadores</option>
+                <option value="8">8 jogadores</option>
+              </select>
+              <p id="player-help" class="helper-text">Dê um apelido a cada treinador. O quadro do draft se ajusta a eles.</p>
+              <div id="nickname-fields" class="nickname-fields"></div>
+              <button id="start-draft" class="primary-button" type="button">
+                Iniciar PokeDraft <span aria-hidden="true">→</span>
+              </button>
+            </section>
+          </div>
+
+          <section class="setup-card multiplayer-card" aria-labelledby="multiplayer-title">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">03 · MULTIPLAYER</p>
+                <h2 id="multiplayer-title">Como vocês vão jogar?</h2>
+              </div>
+            </div>
+            <div class="mp-mode-grid" role="radiogroup" aria-label="Modo de jogo">
+              <button type="button" class="mp-mode-option" data-mode="local" aria-checked="true" role="radio">
+                <span class="mp-mode-label">Jogar local</span>
+                <span class="mp-mode-desc">Todos no mesmo dispositivo, como hoje.</span>
+              </button>
+              <button type="button" class="mp-mode-option" data-mode="host" aria-checked="false" role="radio">
+                <span class="mp-mode-label">Criar sala online</span>
+                <span class="mp-mode-desc">Configure região e apelidos, depois inicie para gerar um código compartilhável.</span>
+              </button>
+              <button type="button" class="mp-mode-option" data-mode="guest" aria-checked="false" role="radio">
+                <span class="mp-mode-label">Entrar em uma sala</span>
+                <span class="mp-mode-desc">Cole o código ou abra o link enviado pelo anfitrião.</span>
+              </button>
+            </div>
+
+            <div id="mp-host-panel" class="mp-panel" hidden>
+              <p class="helper-text">Ao iniciar o draft, uma sala PeerJS será criada. Mantenha esta aba aberta — o anfitrião é a autoridade do jogo.</p>
+              <p class="mp-host-note">⚠ O anfitrião precisa manter a página aberta para os convidados continuarem conectados.</p>
+            </div>
+
+            <div id="mp-guest-panel" class="mp-panel" hidden>
+              <label class="field-label" for="room-code-input">Código da sala</label>
+              <div class="mp-join-row">
+                <input id="room-code-input" class="nickname-input room-code-input" maxlength="12" placeholder="Ex.: A3F9K2" autocomplete="off" spellcheck="false" aria-describedby="join-help" />
+                <button id="join-room" class="primary-button mp-join-button" type="button">Entrar na sala</button>
+              </div>
+              <p id="join-help" class="helper-text">Você verá o draft em tempo real e poderá reivindicar um assento de treinador ou apenas assistir.</p>
+              <p id="join-error" class="mp-error" hidden></p>
+            </div>
+
+          </section>
+        </section>
+
+        <section id="draft-screen" class="draft-screen" hidden aria-live="polite">
+          <div class="draft-header">
+            <div>
+              <p id="draft-overline" class="eyebrow">CARREGANDO POKÉDEX</p>
+              <h1 id="draft-title">Preparando seu draft…</h1>
+              <p id="draft-description" class="draft-description">Buscando os Pokémon disponíveis nesta aventura.</p>
+            </div>
+            <div class="draft-header-actions">
+              <button id="back-to-menu" class="secondary-button compact-button" type="button">← Menu principal</button>
+              <div id="draft-progress" class="draft-progress" aria-label="Progresso do draft"></div>
+            </div>
+          </div>
+
+          <div id="seat-picker" class="seat-picker" hidden>
+            <div class="seat-picker-card">
+              <p class="eyebrow">ASSENTO</p>
+              <h2>Quem você controla?</h2>
+              <p class="helper-text">Escolha o treinador cujo turno você vai jogar, ou assista sem controlar ninguém.</p>
+              <div id="seat-list" class="seat-list"></div>
+              <button id="spectate-btn" class="secondary-button" type="button">Apenas assistir</button>
+            </div>
+          </div>
+
+          <div class="draft-layout">
+            <aside class="teams-panel" aria-label="Times dos treinadores">
+              <div class="panel-title-row">
+                <h2>Times no draft</h2>
+                <span id="team-total" class="panel-count">0 / 6</span>
+              </div>
+              <div id="teams-list" class="teams-list"></div>
+            </aside>
+
+            <section class="action-panel" aria-labelledby="action-title">
+              <div id="action-content"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="pokemon-card-template">
+      <button class="pokemon-card" type="button">
+        <img class="pokemon-art" alt="" loading="lazy" />
+        <span class="pokemon-number"></span>
+        <span class="pokemon-name"></span>
+        <span class="pokemon-types"></span>
+      </button>
+    </template>
+
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
