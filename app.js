@@ -72,12 +72,18 @@ const FALLBACK_DEX = {
   paldea: "sprigatito floragato meowscarada fuecoco crocalor skeledirge quaxly quaxwell quaquaval lechonk tarountula nymble pawmi smoliv nacli charcadet tadbulb wattrel maschiff shroodle fidough squawkabilly naclstack capsakid rellor flittle tinkatink wiglett bombirdier varoom cyclizar orthworm glimmet greavard flamigo cetoddle veluza dondozo tatsugiri frigibax gimmighoul".split(" ")
 };
 
-const STAGES = [
-  { id: "pick-1", kind: "pick", label: "Draft 1", sub: "Escolha um Pokémon para o seu time.", number: 2 },
-  { id: "roll-early", kind: "roll", label: "Encontro 1", sub: "Um encontro fácil no começo da jornada.", tier: "early", number: 3 },
-  { id: "pick-2", kind: "pick", label: "Draft 2", sub: "Agora é sua vez de escolher de novo.", number: 4 },
-  { id: "roll-mid", kind: "roll", label: "Encontro 2", sub: "Um encontro um pouco mais raro na rota.", tier: "mid", number: 5 },
-  { id: "pick-3", kind: "pick", label: "Draft 3", sub: "A última escolha fecha o time de seis.", number: 6 },
+const DRAFT_CYCLES = [
+  { id: "cycle-1", steps: [
+    { kind: "pick", label: "Draft 1", sub: "Escolha um Pokémon para o seu time.", number: 2 },
+    { kind: "roll", label: "Encontro 1", sub: "Um encontro fácil no começo da jornada.", tier: "early", number: 3 },
+  ]},
+  { id: "cycle-2", steps: [
+    { kind: "pick", label: "Draft 2", sub: "Agora é sua vez de escolher de novo.", number: 4 },
+    { kind: "roll", label: "Encontro 2", sub: "Um encontro um pouco mais raro na rota.", tier: "mid", number: 5 },
+  ]},
+  { id: "cycle-3", steps: [
+    { kind: "pick", label: "Draft 3", sub: "A última escolha fecha o time de seis.", number: 6 },
+  ]},
 ];
 
 const state = {
@@ -85,7 +91,8 @@ const state = {
   teams: [],
   dex: [],
   cache: new Map(),
-  stageIndex: -1,
+  cycleIndex: -1,
+  stepIndex: 0,
   playerIndex: 0,
   turnOrder: [],
   turnPos: 0,
@@ -177,17 +184,22 @@ function shuffleInPlace(items) {
   }
   return items;
 }
-function beginStageTurns(kind = stage()?.kind) {
-  if (kind === "pick") state.turnOrder = shuffleInPlace(state.teams.map((_, index) => index));
-  else state.turnOrder = state.teams.map((_, index) => index);
+function beginCycle() {
+  state.turnOrder = shuffleInPlace(state.teams.map((_, index) => index));
   state.turnPos = 0;
+  state.stepIndex = 0;
   state.playerIndex = state.turnOrder[0] ?? 0;
 }
 function artFor(id) { return `${ART_URL}/${id}.png`; }
 function cryFor(id) { return `https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest/${id}.ogg`; }
 function isTaken(name) { return state.teams.some((team) => team.pokemon.some((pokemon) => pokemon.name === name)); }
 function player() { return state.teams[state.playerIndex]; }
-function stage() { return STAGES[state.stageIndex]; }
+function cycle() { return DRAFT_CYCLES[state.cycleIndex]; }
+function stage() {
+  const current = cycle();
+  return current ? current.steps[state.stepIndex] || null : null;
+}
+function draftFinished() { return state.cycleIndex >= DRAFT_CYCLES.length; }
 function isRestrictedStarter(name) {
   return STARTER_LINE_POKEMON.has(name) && !(currentRegion().id === "kalos" && KANTO_STARTER_LINE.has(name));
 }
@@ -334,7 +346,8 @@ function serializeSnapshot() {
       pokemon: team.pokemon.map(serializePokemon),
     })),
     dex: state.dex.map((p) => ({ id: p.id, name: p.name, entry: p.entry })),
-    stageIndex: state.stageIndex,
+    cycleIndex: state.cycleIndex,
+    stepIndex: state.stepIndex,
     playerIndex: state.playerIndex,
     turnOrder: [...state.turnOrder],
     turnPos: state.turnPos,
@@ -365,7 +378,8 @@ function applySnapshot(snapshot) {
     pokemon: (team.pokemon || []).map((p) => ({ ...p })),
   }));
   state.dex = (snapshot.dex || []).map((p) => ({ ...p }));
-  state.stageIndex = snapshot.stageIndex;
+  state.cycleIndex = snapshot.cycleIndex ?? -1;
+  state.stepIndex = snapshot.stepIndex ?? 0;
   state.playerIndex = snapshot.playerIndex;
   state.turnOrder = [...(snapshot.turnOrder || [])];
   state.turnPos = snapshot.turnPos;
@@ -1093,7 +1107,8 @@ async function hydrateBatch(items) {
 function resetDraftRuntime() {
   state.dex = [];
   state.cache.clear();
-  state.stageIndex = -1;
+  state.cycleIndex = -1;
+  state.stepIndex = 0;
   state.playerIndex = 0;
   state.turnOrder = [];
   state.turnPos = 0;
@@ -1145,8 +1160,8 @@ async function prepareDexAndBeginDraft() {
     throw error;
   }
   await assignStarters();
-  state.stageIndex = 0;
-  beginStageTurns("pick");
+  state.cycleIndex = 0;
+  beginCycle();
   state.draftStarted = true;
   state.phase = "draft";
   renderDraft();
@@ -1282,7 +1297,7 @@ function renderProgress() {
     node.className = "progress-node";
     const currentNumber = state.replacement ? state.replacement.number : (stage()?.number || 1);
     if (number < currentNumber) node.classList.add("is-complete");
-    if (number === currentNumber && state.stageIndex < STAGES.length) node.classList.add("is-current");
+    if (number === currentNumber && !draftFinished()) node.classList.add("is-current");
     node.setAttribute("aria-label", `Slot ${number}`);
     el.draftProgress.append(node);
   }
@@ -1331,12 +1346,12 @@ function loadingMarkup(message) { return `<div class="encounter-loading"><div><d
 function renderDraft() {
   renderProgress();
   renderTeams();
-  if (state.stageIndex >= STAGES.length && !state.replacement) return renderFinish();
+  if (draftFinished() && !state.replacement) return renderFinish();
   const active = state.replacement || { ...stage(), playerIndex: state.playerIndex };
   const activeTeam = state.teams[active.playerIndex];
   if (!activeTeam) return;
   const isReplacement = Boolean(state.replacement);
-  el.draftOverline.textContent = isReplacement ? "REPOSIÇÃO DE TIME" : `${String(active.number).padStart(2, "0")} · ${active.kind === "pick" ? "ESCOLHA" : "ENCONTRO"}`;
+  el.draftOverline.textContent = isReplacement ? "REPOSIÇÃO DE TIME" : `${String(active.number).padStart(2, "0")} · ${active.kind === "pick" ? "ESCOLHA" : "ENCONTRO SORTEADO"}`;
   el.draftTitle.textContent = isReplacement ? `${activeTeam.name}, complete sua vaga` : `${active.label} · ${activeTeam.name}`;
   el.draftDescription.textContent = isReplacement ? "Você removeu um Pokémon. Faça uma reposição para manter o time com seis." : active.sub;
   if (active.kind === "pick") renderPick(active, activeTeam, isReplacement);
@@ -1354,7 +1369,7 @@ function renderPick(active, activeTeam, isReplacement) {
   el.action.innerHTML = `
     ${lockedNoteMarkup()}
     <div class="turn-title">
-      <div><p class="eyebrow">${isReplacement ? "ESCOLHA DE REPOSIÇÃO" : "DRAFT MANUAL"}</p><h2 id="action-title">Escolha com intenção.</h2></div>
+      <div><p class="eyebrow">${isReplacement ? "ESCOLHA DE REPOSIÇÃO" : "ESCOLHA"}</p><h2 id="action-title">Escolha com intenção.</h2></div>
       <div class="turn-status">Vez de <strong>${escapeHTML(activeTeam.name)}</strong><br />${pool.length} Pokémon elegíveis</div>
     </div>
     <div class="draft-controls">
@@ -1542,20 +1557,36 @@ function continueAfterChoice() {
   if (state.replacement) {
     const saved = state.replacement.resume;
     state.replacement = null;
-    state.stageIndex = saved.stageIndex;
+    state.cycleIndex = saved.cycleIndex;
+    state.stepIndex = saved.stepIndex ?? 0;
     state.playerIndex = saved.playerIndex;
     state.turnPos = Math.max(0, state.turnOrder.indexOf(saved.playerIndex));
     renderDraft();
     notifyStateChanged();
     return;
   }
-  if (state.turnPos < state.turnOrder.length - 1) {
+
+  const currentCycle = cycle();
+  if (!currentCycle) {
+    renderDraft();
+    notifyStateChanged();
+    return;
+  }
+
+  // Same player still has a step in this cycle (pick → roll).
+  if (state.stepIndex < currentCycle.steps.length - 1) {
+    state.stepIndex += 1;
+  } else if (state.turnPos < state.turnOrder.length - 1) {
+    // Next player starts their pick for this cycle.
     state.turnPos += 1;
+    state.stepIndex = 0;
     state.playerIndex = state.turnOrder[state.turnPos];
   } else {
-    state.stageIndex += 1;
-    if (state.stageIndex < STAGES.length) beginStageTurns(STAGES[state.stageIndex].kind);
+    // Cycle complete: reshuffle and start the next cycle (or finish).
+    state.cycleIndex += 1;
+    if (state.cycleIndex < DRAFT_CYCLES.length) beginCycle();
   }
+
   renderDraft();
   notifyStateChanged();
 }
@@ -1572,7 +1603,7 @@ function requestRemovePokemon(teamIndex, slotIndex) {
 function removePokemonLocal(teamIndex, slotIndex) {
   const removed = state.teams[teamIndex].pokemon.splice(slotIndex, 1)[0];
   if (!removed) return;
-  const resume = { stageIndex: state.stageIndex, playerIndex: state.playerIndex };
+  const resume = { cycleIndex: state.cycleIndex, stepIndex: state.stepIndex, playerIndex: state.playerIndex };
   const kind = removed.source === "pick" ? "pick" : "roll";
   state.replacement = { playerIndex: teamIndex, kind, tier: removed.tier === "starter" ? "starter" : removed.tier, number: slotIndex + 1, resume, label: "Reposição" };
   state.candidate = null;
