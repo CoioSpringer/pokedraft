@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#080808" />
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem("pokedraft:theme");
+          if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+        } catch (_) {}
+      })();
+    </script>
     <title>PokeDraft — monte seu time</title>
     <link rel="preconnect" href="https://pokeapi.co" />
     <link rel="preconnect" href="https://raw.githubusercontent.com" />
@@ -18,6 +26,10 @@
         </a>
         <div class="topbar-actions">
           <span id="net-status" class="net-status-pill" aria-live="polite">Local</span>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Ativar tema claro" aria-pressed="false" title="Ativar tema claro">
+            <span class="theme-toggle-ball" aria-hidden="true"><span></span></span>
+            <span class="sr-only">Ativar tema claro</span>
+          </button>
           <label class="volume-control" for="cry-volume" title="Volume dos cries">
             <span class="volume-icon" aria-hidden="true">♪</span>
             <span class="sr-only">Volume dos cries</span>
@@ -224,6 +236,7 @@
       </button>
     </template>
 
+    <script src="theme.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="app.js"></script>
   </body>
