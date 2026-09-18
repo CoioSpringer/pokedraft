@@ -53,30 +53,35 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .brand-mark span { width: 7px; height: 7px; border: 2px solid currentColor; border-radius: 50%; background: var(--navy); z-index: 1; }
 .topbar-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
 .theme-toggle {
-  width: 40px;
-  height: 40px;
-  padding: 0;
+  width: 42px;
+  height: 42px;
+  padding: 3px;
   display: inline-grid;
   place-items: center;
   color: var(--ink);
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, .04);
   border-radius: 50%;
-  transition: transform .18s ease, border-color .18s ease, background .18s ease, filter .18s ease;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
   flex-shrink: 0;
+  overflow: hidden;
 }
-.theme-toggle:hover { transform: translateY(-1px) rotate(-8deg); border-color: var(--blue); background: rgba(255, 255, 255, .1); }
+.theme-toggle:hover { transform: translateY(-1px) scale(1.04); border-color: var(--blue); background: rgba(255, 255, 255, .1); }
 .theme-toggle:active { transform: scale(.94); }
 .theme-toggle-icon {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: block;
+  grid-area: 1 / 1;
   object-fit: contain;
   pointer-events: none;
-  transition: transform .28s ease, filter .18s ease;
+  border-radius: 50%;
+  transition: opacity .18s ease, transform .28s ease;
 }
-.theme-toggle:hover .theme-toggle-icon { transform: rotate(12deg); }
-html[data-theme="light"] .theme-toggle-icon { filter: invert(1); }
+.theme-toggle-icon-light { opacity: 0; }
+html[data-theme="light"] .theme-toggle-icon-dark { opacity: 0; }
+html[data-theme="light"] .theme-toggle-icon-light { opacity: 1; }
+.theme-toggle:hover .theme-toggle-icon { transform: rotate(10deg); }
 .volume-control {
   display: inline-flex;
   align-items: center;
