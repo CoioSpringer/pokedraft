@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080808" />
+    <title>Regras — PokeDraft</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="index.html" aria-label="PokeDraft, início">
+          <span class="brand-mark" aria-hidden="true"><span></span></span>
+          <span>POKE<span>DRAFT</span></span>
+        </a>
+        <div class="topbar-actions">
+          <span class="game-context">Guia rápido do draft</span>
+          <a class="text-button" href="index.html">Voltar ao PokeDraft</a>
+        </div>
+      </header>
+
+      <main class="rules-main">
+        <section class="rules-hero" aria-labelledby="rules-title">
+          <p class="eyebrow">GUIA DO POKEDRAFT</p>
+          <h1 id="rules-title">Seu time, do jeito mais <em>inesperado.</em></h1>
+          <p class="rules-lead">Aqui você encontra o passo a passo para montar um time de seis Pokémon, seja jogando sozinho no mesmo dispositivo ou com a galera em uma sala online.</p>
+          <div class="rules-hero-actions">
+            <a class="primary-button rules-back-link" href="index.html">Começar um draft <span aria-hidden="true">→</span></a>
+          </div>
+        </section>
+
+        <div class="rules-content">
+          <section class="rules-card" aria-labelledby="prepare-title">
+            <div class="rules-card-heading">
+              <span class="rules-number">01</span>
+              <h2 id="prepare-title">Como montar o time</h2>
+            </div>
+            <ol class="rules-steps">
+              <li><strong>Escolha a região.</strong> Ela define a Pokédex da aventura e as espécies que podem aparecer no seu draft.</li>
+              <li><strong>Monte a mesa.</strong> No modo local, escolha o número de treinadores e dê um apelido a cada um. No online, crie ou entre em uma sala e cada pessoa escolhe seu apelido no lobby.</li>
+              <li><strong>Receba o primeiro Pokémon.</strong> O Slot 1 é um inicial sorteado: o PokeDraft entrega a forma final de uma das linhas de iniciais da região para cada treinador.</li>
+              <li><strong>Jogue as rodadas.</strong> Depois do inicial, todos os jogadores participam das etapas de escolha e de encontro sorteado até preencher os seis slots.</li>
+            </ol>
+          </section>
+
+          <section class="rules-card" aria-labelledby="starter-title">
+            <div class="rules-card-heading">
+              <span class="rules-number">02</span>
+              <h2 id="starter-title">O começo é sorteado</h2>
+            </div>
+            <p>Cada time começa com um inicial escolhido ao acaso entre os três iniciais da região. O Pokémon mostrado já é a <strong>forma final da linha</strong> — por exemplo, uma linha de inicial pode aparecer como Venusaur, Charizard ou Blastoise.</p>
+            <div class="rules-note"><strong>Sobre os iniciais nas escolhas:</strong> as linhas de iniciais seguem as restrições do app para a região. Em Kalos, os finais de Kanto entram como convidados especiais; as outras espécies continuam obedecendo aos filtros da Pokédex do draft.</div>
+          </section>
+
+          <section class="rules-card" aria-labelledby="rounds-title">
+            <div class="rules-card-heading">
+              <span class="rules-number">03</span>
+              <h2 id="rounds-title">As rodadas</h2>
+            </div>
+            <p>Em cada etapa, o PokeDraft passa por <strong>todos os jogadores</strong>. Há dois tipos de ação:</p>
+            <div class="rules-phase-grid">
+              <article class="rules-phase">
+                <h3>Escolha (pick)</h3>
+                <p>A ordem dos jogadores é sorteada naquela rodada. Na sua vez, escolha um Pokémon disponível da Pokédex da região. Lendários não entram, espécies já escolhidas por qualquer treinador ficam bloqueadas e as restrições de iniciais do app continuam valendo.</p>
+              </article>
+              <article class="rules-phase">
+                <h3>Encontro sorteado (roll)</h3>
+                <p>Para cada treinador, o app sorteia um Pokémon da região. Ele dá preferência a um Pokémon que não repita os tipos que já estão no seu time. Você pode sortear novamente ou adicionar o encontro ao time.</p>
+              </article>
+            </div>
+            <p class="rules-sequence">A sequência é: <strong>pick → encontro → pick → encontro → pick</strong>. Com o inicial, isso fecha os 6 Pokémon de cada time.</p>
+          </section>
+
+          <section class="rules-card" aria-labelledby="replacement-title">
+            <div class="rules-card-heading">
+              <span class="rules-number">04</span>
+              <h2 id="replacement-title">Mudou de ideia?</h2>
+            </div>
+            <p>Você pode remover um Pokémon do seu time mesmo depois de terminar o draft. Remover um Pokémon dispara uma reposição para aquele slot: se ele veio de uma <strong>escolha (pick)</strong>, você faz outra escolha; se veio de um <strong>encontro sorteado</strong> — inclusive o inicial — você recebe um novo sorteio. A rodada normal continua depois que a reposição for concluída.</p>
+          </section>
+
+          <section class="rules-card" aria-labelledby="multiplayer-title">
+            <div class="rules-card-heading">
+              <span class="rules-number">05</span>
+              <h2 id="multiplayer-title">Como funciona o multiplayer</h2>
+            </div>
+            <ul class="rules-list">
+              <li><strong>Anfitrião:</strong> escolha a região e o máximo de jogadores, crie a sala e compartilhe o link ou código.</li>
+              <li><strong>Convidados:</strong> entrem pelo link ou código, coloquem um apelido e escolham um assento no lobby.</li>
+              <li><strong>Início:</strong> o anfitrião começa quando houver pelo menos 2 treinadores sentados.</li>
+              <li><strong>Durante a partida:</strong> cada pessoa joga somente no próprio turno e assento. A aba do anfitrião precisa ficar aberta para a sala continuar conectada.</li>
+            </ul>
+            <div class="rules-note"><strong>Prefere jogar lado a lado?</strong> O modo local continua disponível no mesmo dispositivo, sem lobby online.</div>
+          </section>
+
+          <section class="rules-card" aria-labelledby="extras-title">
+            <div class="rules-card-heading">
+              <span class="rules-number">06</span>
+              <h2 id="extras-title">Pequenos detalhes</h2>
+            </div>
+            <p>O controle de volume dos cries fica no topo da interface do draft — ajuste ou silencie os sons quando quiser. E, se bater vontade de tentar outra aventura, é só voltar ao menu principal para começar um novo draft.</p>
+          </section>
+        </div>
+
+        <footer class="rules-footer">
+          <p>Agora que você já sabe como funciona, é hora de deixar o acaso montar seu time.</p>
+          <a class="secondary-button rules-back-link" href="index.html">Voltar ao PokeDraft <span aria-hidden="true">→</span></a>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>
